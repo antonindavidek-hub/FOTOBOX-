@@ -1,0 +1,2165 @@
+name: Build FOTOBOX v3 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Create FOTOBOX v3
+        run: |
+          rm -rf app settings.gradle build.gradle
+
+          mkdir -p app/src/main/java/com/fotobox/app
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-anydpi
+          mkdir -p app/src/main/res/mipmap-anydpi-v26
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "FOTOBOX"
+          include(":app")
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.fotobox.app'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.fotobox.app'
+                  minSdk 26
+                  targetSdk 35
+                  versionCode 4
+                  versionName '0.4'
+              }
+          }
+          EOF
+
+          cat > app/src/main/res/values/colors.xml <<'EOF'
+          <resources>
+              <color name="fotobox_blue">#2389FF</color>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+              <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:colorAccent">#2389FF</item>
+                  <item name="android:navigationBarColor">#061019</item>
+                  <item name="android:statusBarColor">#07111C</item>
+                  <item name="android:windowLightStatusBar">false</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/mipmap-anydpi/ic_launcher.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+
+              <path
+                  android:fillColor="#2389FF"
+                  android:pathData="M0,0H108V108H0Z"/>
+
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M29,34H42L47,27H61L66,34H79C84,34 88,38 88,43V75C88,80 84,84 79,84H29C24,84 20,80 20,75V43C20,38 24,34 29,34Z"/>
+
+              <path
+                  android:fillColor="#2389FF"
+                  android:pathData="M54,43A16,16 0,1 0,54 75A16,16 0,1 0,54 43"/>
+
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M54,49A10,10 0,1 0,54 69A10,10 0,1 0,54 49"/>
+          </vector>
+          EOF
+
+          cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/fotobox_blue"/>
+              <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          EOF
+
+          cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher_foreground.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M30,35H42L47,28H61L66,35H78C83,35 87,39 87,44V74C87,79 83,83 78,83H30C25,83 21,79 21,74V44C21,39 25,35 30,35Z"/>
+
+              <path
+                  android:fillColor="#2389FF"
+                  android:pathData="M54,43A16,16 0,1 0,54 75A16,16 0,1 0,54 43"/>
+
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M54,49A10,10 0,1 0,54 69A10,10 0,1 0,54 49"/>
+          </vector>
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <queries>
+                  <intent>
+                      <action android:name="android.media.action.IMAGE_CAPTURE"/>
+                  </intent>
+              </queries>
+
+              <application
+                  android:label="FOTOBOX"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:theme="@style/AppTheme">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:screenOrientation="portrait"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+
+                  </activity>
+
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/com/fotobox/app/MainActivity.java <<'EOF'
+          package com.fotobox.app;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.content.Intent;
+          import android.content.ClipData;
+          import android.content.ContentValues;
+          import android.graphics.Bitmap;
+          import android.graphics.BitmapFactory;
+          import android.net.Uri;
+          import android.provider.MediaStore;
+          import android.util.Base64;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.widget.Toast;
+
+          import java.io.ByteArrayOutputStream;
+          import java.io.InputStream;
+
+          public class MainActivity extends Activity {
+
+              private static final int REQ_GALLERY = 1001;
+              private static final int REQ_CAMERA = 1002;
+
+              private WebView web;
+              private Uri cameraUri;
+
+              @Override
+              public void onCreate(Bundle b) {
+                  super.onCreate(b);
+
+                  web = new WebView(this);
+                  setContentView(web);
+
+                  WebSettings s = web.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setAllowFileAccess(true);
+                  s.setAllowContentAccess(true);
+
+                  web.setWebViewClient(new WebViewClient() {
+                      @Override
+                      public boolean shouldOverrideUrlLoading(WebView view, String url) {
+
+                          if (url.startsWith("fotobox://gallery")) {
+                              openGallery();
+                              return true;
+                          }
+
+                          if (url.startsWith("fotobox://camera")) {
+                              openCamera();
+                              return true;
+                          }
+
+                          return false;
+                      }
+                  });
+
+                  web.loadUrl("file:///android_asset/index.html");
+              }
+
+              private void openGallery() {
+
+                  Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                  i.addCategory(Intent.CATEGORY_OPENABLE);
+                  i.setType("image/*");
+                  i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+
+                  startActivityForResult(i, REQ_GALLERY);
+              }
+
+              private void openCamera() {
+
+                  try {
+
+                      ContentValues values = new ContentValues();
+
+                      values.put(
+                          MediaStore.Images.Media.DISPLAY_NAME,
+                          "FOTOBOX_" + System.currentTimeMillis() + ".jpg"
+                      );
+
+                      values.put(
+                          MediaStore.Images.Media.MIME_TYPE,
+                          "image/jpeg"
+                      );
+
+                      cameraUri = getContentResolver().insert(
+                          MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                          values
+                      );
+
+                      Intent i =
+                          new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+
+                      if (cameraUri != null) {
+                          i.putExtra(
+                              MediaStore.EXTRA_OUTPUT,
+                              cameraUri
+                          );
+                      }
+
+                      startActivityForResult(i, REQ_CAMERA);
+
+                  } catch (Exception e) {
+
+                      Toast.makeText(
+                          this,
+                          "Fotoaparát se nepodařilo otevřít",
+                          Toast.LENGTH_LONG
+                      ).show();
+                  }
+              }
+
+              @Override
+              protected void onActivityResult(
+                  int requestCode,
+                  int resultCode,
+                  Intent data
+              ) {
+
+                  super.onActivityResult(
+                      requestCode,
+                      resultCode,
+                      data
+                  );
+
+                  if (resultCode != RESULT_OK) return;
+
+                  if (
+                      requestCode == REQ_CAMERA &&
+                      cameraUri != null
+                  ) {
+
+                      sendPhoto(
+                          cameraUri,
+                          "Nová fotografie"
+                      );
+
+                      cameraUri = null;
+
+                      return;
+                  }
+
+                  if (
+                      requestCode == REQ_GALLERY &&
+                      data != null
+                  ) {
+
+                      ClipData clips =
+                          data.getClipData();
+
+                      if (clips != null) {
+
+                          for (
+                              int n = 0;
+                              n < clips.getItemCount();
+                              n++
+                          ) {
+
+                              Uri uri =
+                                  clips
+                                  .getItemAt(n)
+                                  .getUri();
+
+                              sendPhoto(
+                                  uri,
+                                  "Fotografie"
+                              );
+                          }
+
+                      } else if (
+                          data.getData() != null
+                      ) {
+
+                          sendPhoto(
+                              data.getData(),
+                              "Fotografie"
+                          );
+                      }
+                  }
+              }
+
+              private void sendPhoto(
+                  Uri uri,
+                  String title
+              ) {
+
+                  try {
+
+                      InputStream in =
+                          getContentResolver()
+                          .openInputStream(uri);
+
+                      Bitmap bmp =
+                          BitmapFactory
+                          .decodeStream(in);
+
+                      if (in != null) {
+                          in.close();
+                      }
+
+                      if (bmp == null) return;
+
+                      int max = 1800;
+
+                      int w = bmp.getWidth();
+                      int h = bmp.getHeight();
+
+                      Bitmap out = bmp;
+
+                      if (Math.max(w,h) > max) {
+
+                          float ratio =
+                              max /
+                              (float)Math.max(w,h);
+
+                          out =
+                              Bitmap.createScaledBitmap(
+                                  bmp,
+                                  Math.round(w * ratio),
+                                  Math.round(h * ratio),
+                                  true
+                              );
+                      }
+
+                      ByteArrayOutputStream bytes =
+                          new ByteArrayOutputStream();
+
+                      out.compress(
+                          Bitmap.CompressFormat.JPEG,
+                          84,
+                          bytes
+                      );
+
+                      String base64 =
+                          Base64.encodeToString(
+                              bytes.toByteArray(),
+                              Base64.NO_WRAP
+                          );
+
+                      final String photo =
+                          "data:image/jpeg;base64," +
+                          base64;
+
+                      final String safeTitle =
+                          title.replace(
+                              "'",
+                              ""
+                          );
+
+                      web.post(() ->
+
+                          web.evaluateJavascript(
+                              "nativePhotoReceived('" +
+                              photo +
+                              "','" +
+                              safeTitle +
+                              "')",
+                              null
+                          )
+                      );
+
+                  } catch (Exception e) {
+
+                      Toast.makeText(
+                          this,
+                          "Fotografii se nepodařilo načíst",
+                          Toast.LENGTH_LONG
+                      ).show();
+                  }
+              }
+
+              @Override
+              public void onBackPressed() {
+
+                  web.evaluateJavascript(
+                      "androidBack()",
+                      value -> {
+                          if ("false".equals(value)) {
+                              super.onBackPressed();
+                          }
+                      }
+                  );
+              }
+          }
+          EOF
+
+          cat > app/src/main/assets/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="cs">
+
+          <head>
+
+          <meta charset="UTF-8">
+
+          <meta
+              name="viewport"
+              content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"
+          >
+
+          <title>FOTOBOX</title>
+
+          <style>
+
+          :root{
+              --bg:#07111c;
+              --panel:#101f2d;
+              --panel2:#162839;
+              --blue:#2389ff;
+              --text:#ffffff;
+              --muted:#8fa7bb;
+              --line:#21384c;
+          }
+
+          *{
+              box-sizing:border-box;
+          }
+
+          body{
+              margin:0;
+              background:var(--bg);
+              color:var(--text);
+              font-family:Arial,sans-serif;
+              padding-bottom:90px;
+          }
+
+          button,input{
+              font-family:inherit;
+          }
+
+          .top{
+              position:sticky;
+              top:0;
+              z-index:20;
+              padding:16px 18px 10px;
+              background:#07111cf2;
+              backdrop-filter:blur(18px);
+          }
+
+          .brand{
+              display:flex;
+              align-items:center;
+              justify-content:space-between;
+          }
+
+          .brandLeft{
+              display:flex;
+              align-items:center;
+              gap:12px;
+          }
+
+          #liveLogo{
+              width:54px;
+              height:54px;
+              border-radius:16px;
+              background:var(--blue);
+              display:grid;
+              place-items:center;
+              overflow:hidden;
+              font-size:26px;
+              box-shadow:0 8px 26px #0006;
+          }
+
+          #liveLogo img{
+              width:100%;
+              height:100%;
+              object-fit:cover;
+          }
+
+          h1{
+              margin:0;
+              font-size:25px;
+          }
+
+          .sub{
+              color:var(--muted);
+              font-size:12px;
+              margin-top:2px;
+          }
+
+          .iconBtn{
+              width:42px;
+              height:42px;
+              border-radius:13px;
+              border:1px solid var(--line);
+              background:var(--panel);
+              color:white;
+              font-size:19px;
+          }
+
+          .search{
+              margin-top:14px;
+              width:100%;
+              border:1px solid var(--line);
+              border-radius:18px;
+              background:var(--panel);
+              color:white;
+              padding:15px 17px;
+              font-size:16px;
+              outline:none;
+          }
+
+          .screen{
+              display:none;
+              padding:10px 16px 25px;
+          }
+
+          .screen.active{
+              display:block;
+          }
+
+          .sectionTitle{
+              font-size:20px;
+              font-weight:bold;
+              margin:14px 2px 12px;
+          }
+
+          .categories{
+              display:grid;
+              grid-template-columns:1fr 1fr;
+              gap:11px;
+          }
+
+          .category{
+              min-height:105px;
+              border-radius:20px;
+              border:1px solid var(--line);
+              background:linear-gradient(
+                  145deg,
+                  #15293b,
+                  #0c1925
+              );
+              padding:15px;
+              display:flex;
+              flex-direction:column;
+              justify-content:space-between;
+          }
+
+          .category .emoji{
+              font-size:29px;
+          }
+
+          .category strong{
+              font-size:17px;
+          }
+
+          .smallCats{
+              display:grid;
+              grid-template-columns:1fr 1fr 1fr;
+              gap:9px;
+              margin-top:11px;
+          }
+
+          .smallCat{
+              padding:15px 8px;
+              background:var(--panel);
+              border:1px solid var(--line);
+              border-radius:16px;
+              text-align:center;
+              font-size:13px;
+          }
+
+          .aiCard{
+              margin-top:14px;
+              background:
+                  linear-gradient(
+                      135deg,
+                      #173c63,
+                      #102235
+                  );
+              border:1px solid #285983;
+              border-radius:20px;
+              padding:17px;
+          }
+
+          .photoGrid{
+              display:grid;
+              grid-template-columns:
+                  repeat(3,1fr);
+              gap:5px;
+          }
+
+          .photo{
+              position:relative;
+              aspect-ratio:1;
+              background:#132331;
+              overflow:hidden;
+              border-radius:10px;
+          }
+
+          .photo img{
+              width:100%;
+              height:100%;
+              object-fit:cover;
+          }
+
+          .heart{
+              position:absolute;
+              right:5px;
+              bottom:5px;
+              width:33px;
+              height:33px;
+              border:none;
+              border-radius:50%;
+              background:#000a;
+              color:white;
+          }
+
+          .heart.on{
+              color:#ff5377;
+          }
+
+          .empty{
+              padding:35px 15px;
+              text-align:center;
+              color:var(--muted);
+          }
+
+          .rowCard{
+              display:flex;
+              align-items:center;
+              gap:12px;
+              padding:13px;
+              background:var(--panel);
+              border:1px solid var(--line);
+              border-radius:16px;
+              margin-bottom:9px;
+          }
+
+          .thumb{
+              width:65px;
+              height:65px;
+              border-radius:12px;
+              object-fit:cover;
+              background:#172838;
+          }
+
+          .grow{
+              flex:1;
+          }
+
+          .muted{
+              color:var(--muted);
+              font-size:12px;
+          }
+
+          .pill{
+              border:none;
+              border-radius:12px;
+              background:#18344d;
+              color:white;
+              padding:9px 11px;
+          }
+
+          .categoryButtons{
+              display:flex;
+              flex-wrap:wrap;
+              gap:6px;
+              margin-top:7px;
+          }
+
+          .nav{
+              position:fixed;
+              bottom:0;
+              left:0;
+              right:0;
+              z-index:30;
+              height:76px;
+              background:#0a1621f7;
+              border-top:1px solid var(--line);
+              display:grid;
+              grid-template-columns:
+                  1fr 1fr 1.25fr 1fr 1fr;
+              align-items:center;
+              padding:5px 5px 10px;
+          }
+
+          .nav button{
+              border:none;
+              background:transparent;
+              color:#8fa7bb;
+              font-size:11px;
+          }
+
+          .nav button span{
+              display:block;
+              font-size:22px;
+              margin-bottom:2px;
+          }
+
+          #centerAction{
+              width:62px;
+              height:62px;
+              justify-self:center;
+              border-radius:50%;
+              background:var(--blue);
+              color:white;
+              margin-top:-24px;
+              box-shadow:
+                  0 8px 25px #2389ff55;
+              font-size:10px;
+          }
+
+          #centerAction span{
+              font-size:24px;
+          }
+
+          .viewer{
+              position:fixed;
+              inset:0;
+              z-index:50;
+              background:#05090d;
+              display:none;
+              flex-direction:column;
+          }
+
+          .viewer.show{
+              display:flex;
+          }
+
+          .viewerTop{
+              padding:14px;
+              display:flex;
+              justify-content:space-between;
+              align-items:center;
+          }
+
+          #viewerImage{
+              width:100%;
+              flex:1;
+              object-fit:contain;
+              min-height:0;
+          }
+
+          .viewerActions{
+              display:grid;
+              grid-template-columns:
+                  1fr 1fr 1.5fr;
+              gap:8px;
+              padding:12px;
+          }
+
+          .viewerActions button{
+              border:none;
+              border-radius:14px;
+              padding:13px 5px;
+              background:var(--panel);
+              color:white;
+          }
+
+          .viewerActions .ai{
+              background:var(--blue);
+          }
+
+          #editorImage{
+              width:100%;
+              max-height:55vh;
+              object-fit:contain;
+              background:#000;
+              border-radius:16px;
+          }
+
+          .tools{
+              display:grid;
+              grid-template-columns:
+                  repeat(2,1fr);
+              gap:8px;
+              margin-top:12px;
+          }
+
+          .tools button{
+              border:1px solid var(--line);
+              border-radius:14px;
+              padding:13px;
+              background:var(--panel);
+              color:white;
+          }
+
+          .primary{
+              border:none;
+              border-radius:15px;
+              background:var(--blue);
+              color:white;
+              padding:14px;
+              font-weight:bold;
+          }
+
+          </style>
+
+          </head>
+
+          <body>
+
+          <header class="top">
+
+              <div class="brand">
+
+                  <div class="brandLeft">
+
+                      <div id="liveLogo">
+                          📷
+                      </div>
+
+                      <div>
+
+                          <h1>FOTOBOX</h1>
+
+                          <div class="sub">
+                              Fotky. Přehledně. Chytře.
+                          </div>
+
+                      </div>
+
+                  </div>
+
+                  <button
+                      class="iconBtn"
+                      onclick="showScreen('more')">
+                      ⚙️
+                  </button>
+
+              </div>
+
+              <input
+                  id="searchInput"
+                  class="search"
+                  placeholder="🔎 Hledat fotky – kuchyně, auto, výlet..."
+                  oninput="searchPhotos(this.value)"
+              >
+
+          </header>
+
+          <main>
+
+          <section
+              id="home"
+              class="screen active"
+          >
+
+              <div class="sectionTitle">
+                  Kategorie
+              </div>
+
+              <div class="categories">
+
+                  <div
+                      class="category"
+                      onclick="openCategory('Práce')"
+                  >
+                      <div class="emoji">🛠️</div>
+                      <strong>Práce</strong>
+                  </div>
+
+                  <div
+                      class="category"
+                      onclick="openCategory('Rodina')"
+                  >
+                      <div class="emoji">👨‍👩‍👦</div>
+                      <strong>Rodina</strong>
+                  </div>
+
+                  <div
+                      class="category"
+                      onclick="openCategory('Domov')"
+                  >
+                      <div class="emoji">🏠</div>
+                      <strong>Domov</strong>
+                  </div>
+
+                  <div
+                      class="category"
+                      onclick="openCategory('Výlety')"
+                  >
+                      <div class="emoji">🏔️</div>
+                      <strong>Výlety</strong>
+                  </div>
+
+              </div>
+
+              <div class="smallCats">
+
+                  <div
+                      class="smallCat"
+                      onclick="openCategory('Auta')"
+                  >
+                      🚙<br>Auta
+                  </div>
+
+                  <div
+                      class="smallCat"
+                      onclick="openFavorites()"
+                  >
+                      ❤️<br>Oblíbené
+                  </div>
+
+                  <div
+                      class="smallCat"
+                      onclick="openCategory('Dokumenty')"
+                  >
+                      📄<br>Dokumenty
+                  </div>
+
+              </div>
+
+              <div
+                  class="aiCard"
+                  onclick="showScreen('searchScreen')"
+              >
+                  <strong>✨ Chytré hledání</strong>
+
+                  <div class="muted"
+                       style="margin-top:5px">
+                      Hledej podle názvu,
+                      kategorie a štítků.
+                  </div>
+              </div>
+
+              <div class="sectionTitle">
+                  Poslední fotografie
+              </div>
+
+              <div
+                  id="recentGrid"
+                  class="photoGrid"
+              ></div>
+
+          </section>
+
+          <section
+              id="searchScreen"
+              class="screen"
+          >
+
+              <div class="sectionTitle">
+                  Výsledky hledání
+              </div>
+
+              <div
+                  id="searchGrid"
+                  class="photoGrid"
+              ></div>
+
+          </section>
+
+          <section
+              id="inbox"
+              class="screen"
+          >
+
+              <div class="sectionTitle">
+                  Příchozí fotky
+              </div>
+
+              <div
+                  id="inboxList"
+              ></div>
+
+          </section>
+
+          <section
+              id="albums"
+              class="screen"
+          >
+
+              <div class="sectionTitle">
+                  Alba
+              </div>
+
+              <div
+                  id="albumList"
+              ></div>
+
+          </section>
+
+          <section
+              id="more"
+              class="screen"
+          >
+
+              <div class="sectionTitle">
+                  Více
+              </div>
+
+              <div
+                  class="rowCard"
+                  onclick="openFavorites()"
+              >
+                  ❤️
+                  <div class="grow">
+                      <strong>Oblíbené</strong>
+                      <div class="muted">
+                          Fotografie označené srdcem
+                      </div>
+                  </div>
+              </div>
+
+              <div
+                  class="rowCard"
+                  onclick="showScreen('albums')"
+              >
+                  🗂️
+                  <div class="grow">
+                      <strong>Alba</strong>
+                      <div class="muted">
+                          Přehled všech kategorií
+                      </div>
+                  </div>
+              </div>
+
+              <div class="rowCard">
+
+                  🤖
+
+                  <div class="grow">
+                      <strong>AI rozpoznávání</strong>
+                      <div class="muted">
+                          Připraveno pro další AI modul
+                      </div>
+                  </div>
+
+              </div>
+
+              <div class="rowCard">
+
+                  🔒
+
+                  <div class="grow">
+                      <strong>Soukromí</strong>
+                      <div class="muted">
+                          Fotografie zůstávají
+                          uložené v zařízení
+                      </div>
+                  </div>
+
+              </div>
+
+          </section>
+
+          <section
+              id="editor"
+              class="screen"
+          >
+
+              <div class="sectionTitle">
+                  ✨ AI úprava
+              </div>
+
+              <img
+                  id="editorImage"
+              >
+
+              <div class="tools">
+
+                  <button onclick="applyFilter('none')">
+                      Originál
+                  </button>
+
+                  <button onclick="applyFilter('brightness(1.2) contrast(1.05) saturate(1.1)')">
+                      ✨ Vylepšit
+                  </button>
+
+                  <button onclick="applyFilter('brightness(1.25)')">
+                      ☀️ Zesvětlit
+                  </button>
+
+                  <button onclick="applyFilter('saturate(1.35) contrast(1.05)')">
+                      🎨 Barvy
+                  </button>
+
+                  <button onclick="applyFilter('grayscale(1)')">
+                      ⚫ Černobílá
+                  </button>
+
+                  <button onclick="applyFilter('contrast(1.2)')">
+                      ◐ Kontrast
+                  </button>
+
+              </div>
+
+              <button
+                  class="primary"
+                  style="margin-top:12px;width:100%"
+                  onclick="saveEditedCopy()"
+              >
+                  Uložit upravenou kopii
+              </button>
+
+          </section>
+
+          </main>
+
+          <nav class="nav">
+
+              <button
+                  onclick="showScreen('home')"
+              >
+                  <span>⌂</span>
+                  Domů
+              </button>
+
+              <button
+                  onclick="showScreen('searchScreen')"
+              >
+                  <span>⌕</span>
+                  Hledat
+              </button>
+
+              <button
+                  id="centerAction"
+                  onclick="centerAction()"
+              >
+                  <span id="centerIcon">📷</span>
+                  <div id="centerText">
+                      Foťák
+                  </div>
+              </button>
+
+              <button
+                  onclick="showScreen('inbox')"
+              >
+                  <span>📥</span>
+                  Příchozí
+              </button>
+
+              <button
+                  onclick="showScreen('more')"
+              >
+                  <span>☰</span>
+                  Více
+              </button>
+
+          </nav>
+
+          <div
+              id="viewer"
+              class="viewer"
+          >
+
+              <div class="viewerTop">
+
+                  <button
+                      class="iconBtn"
+                      onclick="closeViewer()"
+                  >
+                      ←
+                  </button>
+
+                  <strong>
+                      Fotografie
+                  </strong>
+
+                  <button
+                      class="iconBtn"
+                      onclick="toggleCurrentFavorite()"
+                  >
+                      ❤️
+                  </button>
+
+              </div>
+
+              <img id="viewerImage">
+
+              <div class="viewerActions">
+
+                  <button onclick="toggleCurrentFavorite()">
+                      ❤️ Oblíbené
+                  </button>
+
+                  <button onclick="showCategoryChooser()">
+                      🗂️ Zařadit
+                  </button>
+
+                  <button
+                      class="ai"
+                      onclick="openEditor()"
+                  >
+                      ✨ Upravit pomocí AI
+                  </button>
+
+              </div>
+
+          </div>
+
+          <script>
+
+          let db;
+          let photos = [];
+          let currentScreen = 'home';
+          let currentPhoto = null;
+          let currentFilter = 'none';
+          let liveIndex = 0;
+
+          const categories =
+              [
+                  'Práce',
+                  'Rodina',
+                  'Domov',
+                  'Výlety',
+                  'Auta',
+                  'Dokumenty'
+              ];
+
+          function openDB(){
+
+              return new Promise((resolve,reject)=>{
+
+                  const req =
+                      indexedDB.open(
+                          'FOTOBOX_DB',
+                          1
+                      );
+
+                  req.onupgradeneeded =
+                      e => {
+
+                          const d =
+                              e.target.result;
+
+                          if(
+                              !d.objectStoreNames
+                              .contains('photos')
+                          ){
+
+                              d.createObjectStore(
+                                  'photos',
+                                  {
+                                      keyPath:'id',
+                                      autoIncrement:true
+                                  }
+                              );
+                          }
+                      };
+
+                  req.onsuccess =
+                      e => {
+
+                          db =
+                              e.target.result;
+
+                          resolve();
+                      };
+
+                  req.onerror =
+                      reject;
+              });
+          }
+
+          function getAllPhotos(){
+
+              return new Promise(resolve=>{
+
+                  const tx =
+                      db.transaction(
+                          'photos',
+                          'readonly'
+                      );
+
+                  const req =
+                      tx.objectStore('photos')
+                      .getAll();
+
+                  req.onsuccess =
+                      () => resolve(
+                          req.result || []
+                      );
+              });
+          }
+
+          function addPhoto(photo){
+
+              return new Promise(resolve=>{
+
+                  const tx =
+                      db.transaction(
+                          'photos',
+                          'readwrite'
+                      );
+
+                  tx.objectStore('photos')
+                  .add(photo);
+
+                  tx.oncomplete = resolve;
+              });
+          }
+
+          function savePhoto(photo){
+
+              return new Promise(resolve=>{
+
+                  const tx =
+                      db.transaction(
+                          'photos',
+                          'readwrite'
+                      );
+
+                  tx.objectStore('photos')
+                  .put(photo);
+
+                  tx.oncomplete = resolve;
+              });
+          }
+
+          async function reload(){
+
+              photos =
+                  await getAllPhotos();
+
+              photos.sort(
+                  (a,b)=>
+                      b.created-a.created
+              );
+
+              renderAll();
+          }
+
+          function tagsFromTitle(title){
+
+              const t =
+                  title.toLowerCase();
+
+              const tags = [];
+
+              [
+                  'kuchyně',
+                  'auto',
+                  'bmw',
+                  'dům',
+                  'zahrada',
+                  'práce',
+                  'výlet',
+                  'rodina',
+                  'dokument'
+              ].forEach(word=>{
+
+                  if(t.includes(word)){
+                      tags.push(word);
+                  }
+              });
+
+              return tags;
+          }
+
+          async function nativePhotoReceived(
+              dataUrl,
+              title
+          ){
+
+              await addPhoto({
+
+                  title:
+                      title ||
+                      'Fotografie',
+
+                  src:dataUrl,
+
+                  category:
+                      'Příchozí',
+
+                  favorite:false,
+
+                  tags:
+                      tagsFromTitle(
+                          title || ''
+                      ),
+
+                  created:
+                      Date.now()
+              });
+
+              await reload();
+
+              showScreen('inbox');
+          }
+
+          function photoHTML(p){
+
+              return `
+              <div class="photo"
+                  onclick="openViewer(${p.id})">
+
+                  <img src="${p.src}">
+
+                  <button
+                      class="heart
+                      ${p.favorite ? 'on' : ''}"
+                      onclick="event.stopPropagation();toggleFavorite(${p.id})"
+                  >
+                      ♥
+                  </button>
+
+              </div>
+              `;
+          }
+
+          function renderAll(){
+
+              const recent =
+                  photos.slice(0,12);
+
+              document
+              .getElementById(
+                  'recentGrid'
+              )
+              .innerHTML =
+                  recent.length
+                  ?
+                  recent.map(photoHTML).join('')
+                  :
+                  `<div class="empty">
+                      Zatím tu nejsou fotografie.
+                  </div>`;
+
+              renderInbox();
+              renderAlbums();
+              updateLiveLogo();
+          }
+
+          function renderInbox(){
+
+              const list =
+                  document
+                  .getElementById(
+                      'inboxList'
+                  );
+
+              const incoming =
+                  photos.filter(
+                      p =>
+                      p.category ===
+                      'Příchozí'
+                  );
+
+              if(!incoming.length){
+
+                  list.innerHTML =
+                      `<div class="empty">
+                          Žádné nezařazené fotky.
+                      </div>`;
+
+                  return;
+              }
+
+              list.innerHTML =
+                  incoming.map(p=>`
+
+                  <div class="rowCard">
+
+                      <img
+                          class="thumb"
+                          src="${p.src}"
+                          onclick="openViewer(${p.id})"
+                      >
+
+                      <div class="grow">
+
+                          <strong>
+                              ${p.title}
+                          </strong>
+
+                          <div class="muted">
+                              Kam ji zařadit?
+                          </div>
+
+                          <div class="categoryButtons">
+
+                              ${categories.map(
+                                  c=>`
+                                  <button
+                                      class="pill"
+                                      onclick="assignCategory(${p.id},'${c}')"
+                                  >
+                                      ${c}
+                                  </button>
+                                  `
+                              ).join('')}
+
+                          </div>
+
+                      </div>
+
+                  </div>
+
+                  `).join('');
+          }
+
+          function renderAlbums(){
+
+              const el =
+                  document.getElementById(
+                      'albumList'
+                  );
+
+              el.innerHTML =
+                  categories.map(c=>{
+
+                      const count =
+                          photos.filter(
+                              p=>p.category===c
+                          ).length;
+
+                      return `
+                      <div class="rowCard"
+                           onclick="openCategory('${c}')">
+
+                          🗂️
+
+                          <div class="grow">
+
+                              <strong>
+                                  ${c}
+                              </strong>
+
+                              <div class="muted">
+                                  ${count}
+                                  fotografií
+                              </div>
+
+                          </div>
+
+                          ›
+                      </div>
+                      `;
+
+                  }).join('');
+          }
+
+          async function assignCategory(
+              id,
+              category
+          ){
+
+              const p =
+                  photos.find(
+                      x=>x.id===id
+                  );
+
+              if(!p) return;
+
+              p.category =
+                  category;
+
+              if(
+                  !p.tags.includes(
+                      category.toLowerCase()
+                  )
+              ){
+                  p.tags.push(
+                      category.toLowerCase()
+                  );
+              }
+
+              await savePhoto(p);
+
+              await reload();
+          }
+
+          async function toggleFavorite(id){
+
+              const p =
+                  photos.find(
+                      x=>x.id===id
+                  );
+
+              if(!p) return;
+
+              p.favorite =
+                  !p.favorite;
+
+              await savePhoto(p);
+
+              await reload();
+          }
+
+          function openCategory(category){
+
+              showScreen(
+                  'searchScreen'
+              );
+
+              document
+              .getElementById(
+                  'searchInput'
+              ).value =
+                  category;
+
+              searchPhotos(category);
+          }
+
+          function openFavorites(){
+
+              showScreen(
+                  'searchScreen'
+              );
+
+              document
+              .getElementById(
+                  'searchInput'
+              ).value =
+                  'oblíbené';
+
+              const found =
+                  photos.filter(
+                      p=>p.favorite
+                  );
+
+              renderSearch(found);
+          }
+
+          function searchPhotos(value){
+
+              const q =
+                  (value||'')
+                  .trim()
+                  .toLowerCase();
+
+              if(
+                  q &&
+                  currentScreen !==
+                  'searchScreen'
+              ){
+                  showScreen(
+                      'searchScreen'
+                  );
+              }
+
+              if(!q){
+
+                  renderSearch(photos);
+
+                  return;
+              }
+
+              if(q==='oblíbené'){
+
+                  renderSearch(
+                      photos.filter(
+                          p=>p.favorite
+                      )
+                  );
+
+                  return;
+              }
+
+              const found =
+                  photos.filter(p=>{
+
+                      const hay =
+                          [
+                              p.title,
+                              p.category,
+                              ...(p.tags||[])
+                          ]
+                          .join(' ')
+                          .toLowerCase();
+
+                      return hay.includes(q);
+                  });
+
+              renderSearch(found);
+          }
+
+          function renderSearch(list){
+
+              const grid =
+                  document
+                  .getElementById(
+                      'searchGrid'
+                  );
+
+              grid.innerHTML =
+                  list.length
+                  ?
+                  list.map(photoHTML).join('')
+                  :
+                  `<div class="empty">
+                      Nic jsem nenašel.
+                  </div>`;
+          }
+
+          function showScreen(name){
+
+              currentScreen =
+                  name;
+
+              document
+              .querySelectorAll(
+                  '.screen'
+              )
+              .forEach(
+                  el=>el.classList
+                  .remove('active')
+              );
+
+              document
+              .getElementById(name)
+              .classList.add('active');
+
+              updateCenterButton();
+
+              if(name==='inbox'){
+                  renderInbox();
+              }
+
+              if(name==='albums'){
+                  renderAlbums();
+              }
+          }
+
+          function updateCenterButton(){
+
+              const icon =
+                  document
+                  .getElementById(
+                      'centerIcon'
+                  );
+
+              const text =
+                  document
+                  .getElementById(
+                      'centerText'
+                  );
+
+              if(
+                  currentScreen ===
+                  'home'
+              ){
+
+                  icon.textContent =
+                      '📷';
+
+                  text.textContent =
+                      'Foťák';
+
+              }else{
+
+                  icon.textContent =
+                      '✨';
+
+                  text.textContent =
+                      'AI úprava';
+              }
+          }
+
+          function centerAction(){
+
+              if(
+                  currentScreen ===
+                  'home'
+              ){
+
+                  location.href =
+                      'fotobox://camera';
+
+                  return;
+              }
+
+              if(currentPhoto){
+
+                  openEditor();
+
+                  return;
+              }
+
+              if(photos.length){
+
+                  currentPhoto =
+                      photos[0];
+
+                  openEditor();
+
+                  return;
+              }
+
+              alert(
+                  'Nejdříve přidej fotografii.'
+              );
+          }
+
+          function openViewer(id){
+
+              currentPhoto =
+                  photos.find(
+                      p=>p.id===id
+                  );
+
+              if(!currentPhoto) return;
+
+              document
+              .getElementById(
+                  'viewerImage'
+              ).src =
+                  currentPhoto.src;
+
+              document
+              .getElementById(
+                  'viewer'
+              )
+              .classList.add(
+                  'show'
+              );
+          }
+
+          function closeViewer(){
+
+              document
+              .getElementById(
+                  'viewer'
+              )
+              .classList.remove(
+                  'show'
+              );
+          }
+
+          async function toggleCurrentFavorite(){
+
+              if(!currentPhoto) return;
+
+              await toggleFavorite(
+                  currentPhoto.id
+              );
+
+              currentPhoto =
+                  photos.find(
+                      p=>
+                      p.id===
+                      currentPhoto.id
+                  );
+          }
+
+          function showCategoryChooser(){
+
+              if(!currentPhoto) return;
+
+              const choice =
+                  prompt(
+                      'Kategorie: Práce, Rodina, Domov, Výlety, Auta nebo Dokumenty'
+                  );
+
+              if(
+                  categories.includes(
+                      choice
+                  )
+              ){
+
+                  assignCategory(
+                      currentPhoto.id,
+                      choice
+                  );
+
+                  closeViewer();
+              }
+          }
+
+          function openEditor(){
+
+              if(!currentPhoto) return;
+
+              closeViewer();
+
+              showScreen(
+                  'editor'
+              );
+
+              currentFilter =
+                  'none';
+
+              const img =
+                  document
+                  .getElementById(
+                      'editorImage'
+                  );
+
+              img.src =
+                  currentPhoto.src;
+
+              img.style.filter =
+                  'none';
+          }
+
+          function applyFilter(filter){
+
+              currentFilter =
+                  filter;
+
+              document
+              .getElementById(
+                  'editorImage'
+              )
+              .style.filter =
+                  filter;
+          }
+
+          async function saveEditedCopy(){
+
+              if(!currentPhoto) return;
+
+              const img =
+                  new Image();
+
+              img.onload =
+                  async ()=>{
+
+                      const c =
+                          document.createElement(
+                              'canvas'
+                          );
+
+                      c.width =
+                          img.naturalWidth;
+
+                      c.height =
+                          img.naturalHeight;
+
+                      const ctx =
+                          c.getContext('2d');
+
+                      ctx.filter =
+                          currentFilter;
+
+                      ctx.drawImage(
+                          img,
+                          0,
+                          0
+                      );
+
+                      const data =
+                          c.toDataURL(
+                              'image/jpeg',
+                              0.9
+                          );
+
+                      await addPhoto({
+
+                          title:
+                              currentPhoto.title +
+                              ' – upravená',
+
+                          src:data,
+
+                          category:
+                              currentPhoto.category,
+
+                          favorite:false,
+
+                          tags:
+                              [
+                                  ...(currentPhoto.tags||[]),
+                                  'upravená'
+                              ],
+
+                          created:
+                              Date.now()
+                      });
+
+                      await reload();
+
+                      showScreen(
+                          'home'
+                      );
+
+                      alert(
+                          'Upravená kopie byla uložena.'
+                      );
+                  };
+
+              img.src =
+                  currentPhoto.src;
+          }
+
+          function updateLiveLogo(){
+
+              const fav =
+                  photos.filter(
+                      p=>p.favorite
+                  );
+
+              const el =
+                  document
+                  .getElementById(
+                      'liveLogo'
+                  );
+
+              if(!fav.length){
+
+                  el.innerHTML =
+                      '📷';
+
+                  return;
+              }
+
+              liveIndex =
+                  liveIndex %
+                  fav.length;
+
+              el.innerHTML =
+                  `<img src="${fav[liveIndex].src}">`;
+          }
+
+          setInterval(()=>{
+
+              const fav =
+                  photos.filter(
+                      p=>p.favorite
+                  );
+
+              if(!fav.length) return;
+
+              liveIndex =
+                  (liveIndex + 1) %
+                  fav.length;
+
+              updateLiveLogo();
+
+          },5000);
+
+          function androidBack(){
+
+              const viewer =
+                  document
+                  .getElementById(
+                      'viewer'
+                  );
+
+              if(
+                  viewer.classList
+                  .contains('show')
+              ){
+
+                  closeViewer();
+
+                  return true;
+              }
+
+              if(
+                  currentScreen !==
+                  'home'
+              ){
+
+                  showScreen(
+                      'home'
+                  );
+
+                  return true;
+              }
+
+              return false;
+          }
+
+          (async()=>{
+
+              await openDB();
+
+              await reload();
+
+              renderSearch(
+                  photos
+              );
+
+          })();
+
+          </script>
+
+          </body>
+          </html>
+          EOF
+
+      - name: Build FOTOBOX v3 APK
+        run: gradle assembleDebug
+
+      - name: Upload FOTOBOX v3 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FOTOBOX-v3-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
