@@ -1,0 +1,1420 @@
+name: Build FOTOBOX v4 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Create FOTOBOX v4 project
+        run: |
+          rm -rf app settings.gradle build.gradle
+          mkdir -p app/src/main/java/com/fotobox/app app/src/main/assets app/src/main/res/values app/src/main/res/mipmap-anydpi app/src/main/res/mipmap-anydpi-v26
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name='FOTOBOX'
+          include ':app'
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.7.3' apply false }
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' }
+          android {
+            namespace 'com.fotobox.app'
+            compileSdk 35
+            defaultConfig {
+              applicationId 'com.fotobox.app'
+              minSdk 26
+              targetSdk 35
+              versionCode 5
+              versionName '0.5'
+            }
+          }
+          EOF
+
+          cat > app/src/main/res/values/colors.xml <<'EOF'
+          <resources>
+            <color name="fotobox_blue">#2389FF</color>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+            <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+              <item name="android:fontFamily">sans</item>
+              <item name="android:colorAccent">#2389FF</item>
+              <item name="android:statusBarColor">#07111C</item>
+              <item name="android:navigationBarColor">#07111C</item>
+              <item name="android:windowLightStatusBar">false</item>
+            </style>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/mipmap-anydpi/ic_launcher.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+            <path android:fillColor="#2389FF" android:pathData="M0,0H108V108H0Z"/>
+            <path android:fillColor="#FFFFFF" android:pathData="M29,34H42L47,27H61L66,34H79C84,34 88,38 88,43V75C88,80 84,84 79,84H29C24,84 20,80 20,75V43C20,38 24,34 29,34Z"/>
+            <path android:fillColor="#2389FF" android:pathData="M54,43A16,16 0,1 0,54 75A16,16 0,1 0,54 43"/>
+            <path android:fillColor="#FFFFFF" android:pathData="M54,49A10,10 0,1 0,54 69A10,10 0,1 0,54 49"/>
+          </vector>
+          EOF
+
+          cp app/src/main/res/mipmap-anydpi/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_foreground.xml
+
+          cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@color/fotobox_blue"/>
+            <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+            <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
+            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+
+            <queries>
+              <intent>
+                <action android:name="android.media.action.IMAGE_CAPTURE"/>
+              </intent>
+            </queries>
+
+            <application
+                android:label="FOTOBOX"
+                android:icon="@mipmap/ic_launcher"
+                android:roundIcon="@mipmap/ic_launcher"
+                android:theme="@style/AppTheme">
+
+              <activity
+                  android:name=".MainActivity"
+                  android:screenOrientation="portrait"
+                  android:exported="true">
+
+                <intent-filter>
+                  <action android:name="android.intent.action.MAIN"/>
+                  <category android:name="android.intent.category.LAUNCHER"/>
+                </intent-filter>
+
+              </activity>
+            </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/com/fotobox/app/MainActivity.java <<'EOF'
+          package com.fotobox.app;
+
+          import android.Manifest;
+          import android.app.Activity;
+          import android.os.*;
+          import android.content.*;
+          import android.content.pm.PackageManager;
+          import android.database.Cursor;
+          import android.graphics.*;
+          import android.net.Uri;
+          import android.provider.MediaStore;
+          import android.provider.Settings;
+          import android.view.*;
+          import android.webkit.*;
+          import android.widget.Toast;
+          import org.json.*;
+          import java.io.*;
+          import java.util.*;
+
+          public class MainActivity extends Activity {
+            private static final int REQ_PERM=700, REQ_CAMERA=701;
+            private WebView web;
+            private Uri cameraUri;
+            private int insetTop=0,insetBottom=0;
+
+            @Override
+            public void onCreate(Bundle b){
+              super.onCreate(b);
+
+              web=new WebView(this);
+              setContentView(web);
+
+              WebSettings s=web.getSettings();
+              s.setJavaScriptEnabled(true);
+              s.setDomStorageEnabled(true);
+              s.setAllowFileAccess(true);
+              s.setAllowContentAccess(true);
+
+              web.addJavascriptInterface(new Bridge(),"Android");
+
+              web.setWebViewClient(new WebViewClient(){
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r){
+                  return mediaResponse(r.getUrl());
+                }
+
+                @Override
+                public void onPageFinished(WebView v,String url){
+                  pushInsets();
+                  v.evaluateJavascript("window.onPermissionChanged&&onPermissionChanged()",null);
+                }
+              });
+
+              if(Build.VERSION.SDK_INT>=21){
+                web.setOnApplyWindowInsetsListener((v,i)->{
+                  insetTop=i.getSystemWindowInsetTop();
+                  insetBottom=i.getSystemWindowInsetBottom();
+                  pushInsets();
+                  return i;
+                });
+              }
+
+              web.loadUrl("file:///android_asset/index.html");
+            }
+
+            private void pushInsets(){
+              if(web==null)return;
+
+              web.post(()->web.evaluateJavascript(
+                "document.documentElement.style.setProperty('--android-top','"+insetTop+"px');"+
+                "document.documentElement.style.setProperty('--android-bottom','"+insetBottom+"px')",
+                null
+              ));
+            }
+
+            private boolean fullPermission(){
+              if(Build.VERSION.SDK_INT>=33)
+                return checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES)==PackageManager.PERMISSION_GRANTED;
+
+              return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED;
+            }
+
+            private boolean partialPermission(){
+              return Build.VERSION.SDK_INT>=34 &&
+                  checkSelfPermission(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)==PackageManager.PERMISSION_GRANTED;
+            }
+
+            private void askPermission(){
+              if(Build.VERSION.SDK_INT>=34){
+                requestPermissions(
+                  new String[]{
+                    Manifest.permission.READ_MEDIA_IMAGES,
+                    Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+                  },
+                  REQ_PERM
+                );
+              }else if(Build.VERSION.SDK_INT>=33){
+                requestPermissions(
+                  new String[]{Manifest.permission.READ_MEDIA_IMAGES},
+                  REQ_PERM
+                );
+              }else{
+                requestPermissions(
+                  new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
+                  REQ_PERM
+                );
+              }
+            }
+
+            @Override
+            public void onRequestPermissionsResult(int r,String[] p,int[] g){
+              super.onRequestPermissionsResult(r,p,g);
+
+              if(r==REQ_PERM)
+                web.evaluateJavascript("window.onPermissionChanged&&onPermissionChanged()",null);
+            }
+
+            private WebResourceResponse mediaResponse(Uri u){
+              try{
+                if(!"fotobox.local".equals(u.getHost()))return null;
+
+                List<String> seg=u.getPathSegments();
+
+                if(seg.size()<2)return null;
+
+                long id=Long.parseLong(seg.get(1));
+
+                Uri src=Uri.withAppendedPath(
+                  MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                  String.valueOf(id)
+                );
+
+                if("thumb".equals(seg.get(0))){
+                  Bitmap bm;
+
+                  if(Build.VERSION.SDK_INT>=29){
+                    bm=getContentResolver().loadThumbnail(
+                      src,
+                      new android.util.Size(480,480),
+                      null
+                    );
+                  }else{
+                    InputStream in=getContentResolver().openInputStream(src);
+                    Bitmap raw=BitmapFactory.decodeStream(in);
+
+                    if(in!=null)in.close();
+
+                    int w=raw.getWidth();
+                    int h=raw.getHeight();
+                    int m=Math.max(w,h);
+
+                    float k=Math.min(1f,480f/m);
+
+                    bm=Bitmap.createScaledBitmap(
+                      raw,
+                      Math.max(1,(int)(w*k)),
+                      Math.max(1,(int)(h*k)),
+                      true
+                    );
+                  }
+
+                  ByteArrayOutputStream out=new ByteArrayOutputStream();
+
+                  bm.compress(
+                    Bitmap.CompressFormat.JPEG,
+                    82,
+                    out
+                  );
+
+                  return new WebResourceResponse(
+                    "image/jpeg",
+                    null,
+                    new ByteArrayInputStream(out.toByteArray())
+                  );
+                }
+
+                InputStream in=getContentResolver().openInputStream(src);
+                String type=getContentResolver().getType(src);
+
+                return new WebResourceResponse(
+                  type==null?"image/*":type,
+                  null,
+                  in
+                );
+
+              }catch(Exception e){
+                return null;
+              }
+            }
+
+            private JSONObject photo(Cursor c) throws Exception{
+              JSONObject o=new JSONObject();
+
+              long id=c.getLong(0);
+
+              o.put("id",id);
+              o.put("name",safe(c.getString(1)));
+              o.put("taken",c.getLong(2));
+              o.put("added",c.getLong(3));
+              o.put("bucket",safe(c.getString(4)));
+              o.put("w",c.getInt(5));
+              o.put("h",c.getInt(6));
+              o.put("thumb","https://fotobox.local/thumb/"+id);
+              o.put("full","https://fotobox.local/full/"+id);
+
+              return o;
+            }
+
+            private String safe(String s){
+              return s==null?"":s;
+            }
+
+            private JSONArray page(int offset,int limit,String q){
+              JSONArray a=new JSONArray();
+
+              if(!(fullPermission()||partialPermission()))
+                return a;
+
+              String[] proj={
+                MediaStore.Images.Media._ID,
+                MediaStore.Images.Media.DISPLAY_NAME,
+                MediaStore.Images.Media.DATE_TAKEN,
+                MediaStore.Images.Media.DATE_ADDED,
+                MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
+                MediaStore.Images.Media.WIDTH,
+                MediaStore.Images.Media.HEIGHT
+              };
+
+              Bundle b=new Bundle();
+
+              b.putStringArray(
+                ContentResolver.QUERY_ARG_SORT_COLUMNS,
+                new String[]{MediaStore.Images.Media.DATE_ADDED}
+              );
+
+              b.putInt(
+                ContentResolver.QUERY_ARG_SORT_DIRECTION,
+                ContentResolver.QUERY_SORT_DIRECTION_DESCENDING
+              );
+
+              b.putInt(ContentResolver.QUERY_ARG_LIMIT,limit);
+              b.putInt(ContentResolver.QUERY_ARG_OFFSET,offset);
+
+              if(q!=null&&!q.trim().isEmpty()){
+                b.putString(
+                  ContentResolver.QUERY_ARG_SQL_SELECTION,
+                  "("+
+                  MediaStore.Images.Media.DISPLAY_NAME+
+                  " LIKE ? OR "+
+                  MediaStore.Images.Media.BUCKET_DISPLAY_NAME+
+                  " LIKE ?)"
+                );
+
+                String like="%"+q+"%";
+
+                b.putStringArray(
+                  ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS,
+                  new String[]{like,like}
+                );
+              }
+
+              try(Cursor c=getContentResolver().query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                proj,
+                b,
+                null
+              )){
+                if(c!=null)
+                  while(c.moveToNext())
+                    a.put(photo(c));
+
+              }catch(Exception ignored){}
+
+              return a;
+            }
+
+            private JSONArray buckets(){
+              JSONArray out=new JSONArray();
+
+              if(!(fullPermission()||partialPermission()))
+                return out;
+
+              HashMap<String,Integer> m=new HashMap<>();
+
+              String[] p={
+                MediaStore.Images.Media.BUCKET_DISPLAY_NAME
+              };
+
+              try(Cursor c=getContentResolver().query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                p,
+                null,
+                null,
+                null
+              )){
+                if(c!=null){
+                  while(c.moveToNext()){
+                    String n=safe(c.getString(0));
+
+                    if(n.isEmpty())
+                      n="Ostatní";
+
+                    m.put(
+                      n,
+                      m.getOrDefault(n,0)+1
+                    );
+                  }
+                }
+              }catch(Exception ignored){}
+
+              ArrayList<Map.Entry<String,Integer>> e=
+                  new ArrayList<>(m.entrySet());
+
+              e.sort((a,b)->b.getValue()-a.getValue());
+
+              for(int i=0;i<Math.min(30,e.size());i++){
+                JSONObject o=new JSONObject();
+
+                try{
+                  o.put("name",e.get(i).getKey());
+                  o.put("count",e.get(i).getValue());
+                  out.put(o);
+                }catch(Exception ignored){}
+              }
+
+              return out;
+            }
+
+            private int count(){
+              if(!(fullPermission()||partialPermission()))
+                return 0;
+
+              try(Cursor c=getContentResolver().query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                new String[]{MediaStore.Images.Media._ID},
+                null,
+                null,
+                null
+              )){
+                return c==null?0:c.getCount();
+
+              }catch(Exception e){
+                return 0;
+              }
+            }
+
+            private void openCamera(){
+              runOnUiThread(()->{
+                try{
+                  ContentValues v=new ContentValues();
+
+                  v.put(
+                    MediaStore.Images.Media.DISPLAY_NAME,
+                    "FOTOBOX_"+System.currentTimeMillis()+".jpg"
+                  );
+
+                  v.put(
+                    MediaStore.Images.Media.MIME_TYPE,
+                    "image/jpeg"
+                  );
+
+                  cameraUri=getContentResolver().insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    v
+                  );
+
+                  Intent i=new Intent(
+                    MediaStore.ACTION_IMAGE_CAPTURE
+                  );
+
+                  if(cameraUri!=null)
+                    i.putExtra(
+                      MediaStore.EXTRA_OUTPUT,
+                      cameraUri
+                    );
+
+                  startActivityForResult(
+                    i,
+                    REQ_CAMERA
+                  );
+
+                }catch(Exception e){
+                  Toast.makeText(
+                    this,
+                    "Fotoaparát se nepodařilo otevřít",
+                    Toast.LENGTH_LONG
+                  ).show();
+                }
+              });
+            }
+
+            @Override
+            protected void onActivityResult(
+              int r,
+              int result,
+              Intent data
+            ){
+              super.onActivityResult(r,result,data);
+
+              if(r==REQ_CAMERA&&result==RESULT_OK)
+                web.evaluateJavascript(
+                  "window.onNativeGalleryChanged&&onNativeGalleryChanged()",
+                  null
+                );
+            }
+
+            public class Bridge{
+
+              @JavascriptInterface
+              public String permissionState(){
+                return fullPermission()
+                    ?"full"
+                    :partialPermission()
+                    ?"partial"
+                    :"none";
+              }
+
+              @JavascriptInterface
+              public void requestPermission(){
+                runOnUiThread(()->askPermission());
+              }
+
+              @JavascriptInterface
+              public void openSettings(){
+                runOnUiThread(()->startActivity(
+                  new Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:"+getPackageName())
+                  )
+                ));
+              }
+
+              @JavascriptInterface
+              public String getPhotos(int offset,int limit){
+                return page(
+                  offset,
+                  Math.min(limit,300),
+                  null
+                ).toString();
+              }
+
+              @JavascriptInterface
+              public String searchPhotos(
+                String q,
+                int offset,
+                int limit
+              ){
+                return page(
+                  offset,
+                  Math.min(limit,300),
+                  q
+                ).toString();
+              }
+
+              @JavascriptInterface
+              public String getBuckets(){
+                return buckets().toString();
+              }
+
+              @JavascriptInterface
+              public int getPhotoCount(){
+                return count();
+              }
+
+              @JavascriptInterface
+              public void openCamera(){
+                MainActivity.this.openCamera();
+              }
+            }
+          }
+          EOF
+
+          cat > app/src/main/assets/index.html <<'EOF'
+          <!doctype html>
+          <html lang="cs">
+          <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+
+          <style>
+          :root{
+            --bg:#07111c;
+            --panel:#102131;
+            --panel2:#152b3d;
+            --line:#294055;
+            --blue:#2389ff;
+            --muted:#91a7ba;
+            --android-top:0px;
+            --android-bottom:0px
+          }
+
+          *{box-sizing:border-box}
+
+          body{
+            margin:0;
+            background:var(--bg);
+            color:#fff;
+            font-family:Arial,sans-serif;
+            padding-bottom:calc(92px + var(--android-bottom))
+          }
+
+          .top{
+            padding:calc(12px + var(--android-top)) 16px 10px;
+            position:sticky;
+            top:0;
+            background:#07111cf2;
+            backdrop-filter:blur(18px);
+            z-index:20
+          }
+
+          .brand{
+            display:flex;
+            align-items:center;
+            justify-content:space-between
+          }
+
+          .brandL{
+            display:flex;
+            gap:12px;
+            align-items:center
+          }
+
+          .live{
+            width:54px;
+            height:54px;
+            border-radius:16px;
+            background:var(--blue);
+            display:grid;
+            place-items:center;
+            overflow:hidden;
+            font-size:25px
+          }
+
+          .live img{
+            width:100%;
+            height:100%;
+            object-fit:cover
+          }
+
+          h1{
+            font-size:26px;
+            margin:0
+          }
+
+          .sub,.muted{
+            color:var(--muted)
+          }
+
+          .sub{
+            font-size:12px
+          }
+
+          .gear{
+            border:1px solid var(--line);
+            background:var(--panel);
+            color:#fff;
+            width:44px;
+            height:44px;
+            border-radius:14px;
+            font-size:20px
+          }
+
+          .searchrow{
+            display:flex;
+            gap:8px;
+            margin-top:12px
+          }
+
+          .search{
+            flex:1;
+            border:1px solid var(--line);
+            border-radius:17px;
+            background:var(--panel);
+            color:white;
+            padding:14px 15px;
+            font-size:16px
+          }
+
+          .searchbtn{
+            width:50px;
+            border:0;
+            border-radius:16px;
+            background:var(--blue);
+            color:white;
+            font-size:19px
+          }
+
+          .screen{
+            display:none;
+            padding:10px 16px 28px
+          }
+
+          .screen.active{
+            display:block
+          }
+
+          .title{
+            font-size:21px;
+            font-weight:bold;
+            margin:12px 0
+          }
+
+          .cards{
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:10px
+          }
+
+          .card{
+            min-height:90px;
+            padding:14px;
+            border:1px solid var(--line);
+            border-radius:20px;
+            background:linear-gradient(145deg,#183349,#0e1c29);
+            display:flex;
+            flex-direction:column;
+            justify-content:space-between
+          }
+
+          .grid{
+            display:grid;
+            grid-template-columns:repeat(3,1fr);
+            gap:4px
+          }
+
+          .photo{
+            position:relative;
+            aspect-ratio:1;
+            background:#132536;
+            border-radius:10px;
+            overflow:hidden
+          }
+
+          .photo img{
+            width:100%;
+            height:100%;
+            object-fit:cover
+          }
+
+          .heart{
+            position:absolute;
+            right:5px;
+            bottom:5px;
+            border:0;
+            width:33px;
+            height:33px;
+            border-radius:50%;
+            background:#000a;
+            color:white
+          }
+
+          .heart.on{
+            color:#ff5476
+          }
+
+          .row{
+            display:flex;
+            align-items:center;
+            gap:12px;
+            padding:13px;
+            background:var(--panel);
+            border:1px solid var(--line);
+            border-radius:17px;
+            margin-bottom:9px
+          }
+
+          .grow{
+            flex:1
+          }
+
+          .cover{
+            width:62px;
+            height:62px;
+            border-radius:12px;
+            background:#172a39;
+            object-fit:cover
+          }
+
+          .primary,.secondary{
+            border:0;
+            border-radius:14px;
+            padding:12px 14px;
+            font-weight:bold
+          }
+
+          .primary{
+            background:var(--blue);
+            color:white
+          }
+
+          .secondary{
+            background:var(--panel2);
+            color:white;
+            border:1px solid var(--line)
+          }
+
+          .nav{
+            position:fixed;
+            left:0;
+            right:0;
+            bottom:var(--android-bottom);
+            height:74px;
+            z-index:30;
+            border-top:1px solid var(--line);
+            background:#091722f6;
+            display:grid;
+            grid-template-columns:1fr 1fr 1.15fr 1fr 1fr;
+            align-items:center
+          }
+
+          .nav button{
+            background:none;
+            border:0;
+            color:#8fa7ba;
+            font-size:11px
+          }
+
+          .nav button span{
+            display:block;
+            font-size:22px
+          }
+
+          .center{
+            width:58px!important;
+            height:58px!important;
+            border-radius:50%!important;
+            background:var(--blue)!important;
+            color:white!important;
+            justify-self:center;
+            margin-top:-22px
+          }
+
+          .viewer{
+            position:fixed;
+            inset:0;
+            z-index:60;
+            background:#04080c;
+            display:none;
+            flex-direction:column;
+            padding-top:var(--android-top);
+            padding-bottom:var(--android-bottom)
+          }
+
+          .viewer.show{
+            display:flex
+          }
+
+          .viewerTop{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            padding:12px
+          }
+
+          .viewer img{
+            width:100%;
+            flex:1;
+            object-fit:contain;
+            min-height:0
+          }
+
+          .viewerBtns{
+            display:grid;
+            grid-template-columns:1fr 1fr 1fr;
+            gap:7px;
+            padding:10px
+          }
+
+          .viewerBtns button{
+            border:0;
+            border-radius:13px;
+            padding:12px;
+            background:var(--panel);
+            color:white
+          }
+
+          .permission{
+            position:fixed;
+            inset:0;
+            z-index:100;
+            background:#07111c;
+            display:none;
+            align-items:center;
+            justify-content:center;
+            padding:25px;
+            text-align:center
+          }
+
+          .permission.show{
+            display:flex
+          }
+          </style>
+          </head>
+
+          <body>
+
+          <div id="permission" class="permission">
+            <div>
+              <div style="font-size:60px">🖼️</div>
+              <h2>Přístup k celé galerii</h2>
+              <p>FOTOBOX potřebuje přístup k fotografiím, aby mohl zobrazit a třídit celou galerii telefonu.</p>
+              <button class="primary" onclick="Android.requestPermission()">Povolit fotografie</button>
+              <p class="muted">Na Androidu 14+ zvol „Povolit všechny fotografie“.</p>
+            </div>
+          </div>
+
+          <header class="top">
+            <div class="brand">
+              <div class="brandL">
+                <div id="liveLogo" class="live">📷</div>
+                <div>
+                  <h1>FOTOBOX</h1>
+                  <div class="sub">Celá galerie. Přehledně. Chytře.</div>
+                </div>
+              </div>
+              <button class="gear" onclick="show('more')">⚙️</button>
+            </div>
+
+            <div class="searchrow">
+              <input id="search" class="search" placeholder="Hledat v celé galerii..." onkeydown="if(event.key==='Enter')doSearch()">
+              <button class="searchbtn" onclick="doSearch()">⌕</button>
+            </div>
+          </header>
+
+          <section id="home" class="screen active">
+            <div class="title">Chytré kategorie</div>
+            <div id="smartCats" class="cards"></div>
+
+            <div class="title">Poslední fotografie</div>
+            <div id="recent" class="grid"></div>
+          </section>
+
+          <section id="gallery" class="screen">
+            <div class="title">Všechny fotografie</div>
+            <div id="galleryGrid" class="grid"></div>
+            <button class="secondary" style="width:100%;margin-top:12px" onclick="loadMore()">Načíst další</button>
+          </section>
+
+          <section id="albums" class="screen">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div class="title">Alba</div>
+              <button class="primary" onclick="newAlbum()">+ Nové album</button>
+            </div>
+
+            <div class="title" style="font-size:17px">Moje alba</div>
+            <div id="customAlbums"></div>
+
+            <div class="title" style="font-size:17px">Alba z telefonu</div>
+            <div id="systemAlbums"></div>
+          </section>
+
+          <section id="more" class="screen">
+            <div class="title">Více</div>
+
+            <div class="row">
+              🔐
+              <div class="grow">
+                <b>Originály zůstávají v telefonu</b>
+                <div class="muted">FOTOBOX fotografie nekopíruje ani nepřesouvá.</div>
+              </div>
+            </div>
+
+            <div class="row">
+              🧠
+              <div class="grow">
+                <b>Dynamické kategorie</b>
+                <div class="muted">Pořadí se mění podle toho, co nejčastěji hledáš.</div>
+              </div>
+            </div>
+          </section>
+
+          <nav class="nav">
+            <button onclick="show('home')"><span>⌂</span>Domů</button>
+            <button onclick="show('gallery')"><span>▦</span>Fotky</button>
+            <button class="center" onclick="Android.openCamera()"><span>📷</span>Foťák</button>
+            <button onclick="show('albums')"><span>▣</span>Alba</button>
+            <button onclick="show('more')"><span>☰</span>Více</button>
+          </nav>
+
+          <div id="viewer" class="viewer">
+            <div class="viewerTop">
+              <button class="secondary" onclick="closeViewer()">←</button>
+              <b id="viewerName">Fotografie</b>
+              <button class="secondary" onclick="toggleFav(current.id)">♥</button>
+            </div>
+
+            <img id="viewerImg">
+
+            <div class="viewerBtns">
+              <button onclick="toggleFav(current.id)">❤️ Oblíbené</button>
+              <button onclick="addCurrentToAlbum()">🗂 Přidat do alba</button>
+              <button onclick="Android.openCamera()">📷 Foťák</button>
+            </div>
+          </div>
+
+          <script>
+          let all=[];
+          let offset=0;
+          let pageSize=180;
+          let current=null;
+          let buckets=[];
+
+          const favs=
+            new Set(
+              JSON.parse(
+                localStorage.getItem('favs')||'[]'
+              )
+            );
+
+          let albums=
+            JSON.parse(
+              localStorage.getItem('albums')||'[]'
+            );
+
+          let stats=
+            JSON.parse(
+              localStorage.getItem('searchStats')||'{}'
+            );
+
+          function parse(s){
+            try{return JSON.parse(s||'[]')}
+            catch(e){return[]}
+          }
+
+          function saveState(){
+            localStorage.setItem('favs',JSON.stringify([...favs]));
+            localStorage.setItem('albums',JSON.stringify(albums));
+            localStorage.setItem('searchStats',JSON.stringify(stats));
+          }
+
+          function onPermissionChanged(){
+            const s=Android.permissionState();
+
+            document
+              .getElementById('permission')
+              .classList
+              .toggle('show',s==='none');
+
+            if(s!=='none')
+              refreshAll();
+          }
+
+          function photoHtml(p){
+            return `
+              <div class="photo" onclick="openViewer(${p.id})">
+                <img loading="lazy" src="${p.thumb}">
+                <button class="heart ${favs.has(p.id)?'on':''}" onclick="event.stopPropagation();toggleFav(${p.id})">♥</button>
+              </div>`;
+          }
+
+          function show(id){
+            document.querySelectorAll('.screen')
+              .forEach(x=>x.classList.remove('active'));
+
+            document
+              .getElementById(id)
+              .classList.add('active');
+
+            if(id==='albums')
+              renderAlbums();
+          }
+
+          function refreshAll(){
+            offset=0;
+
+            all=parse(
+              Android.getPhotos(
+                0,
+                pageSize
+              )
+            );
+
+            offset=all.length;
+
+            document
+              .getElementById('galleryGrid')
+              .innerHTML=
+                all.map(photoHtml).join('');
+
+            buckets=parse(
+              Android.getBuckets()
+            );
+
+            renderRecent();
+            renderSmart();
+            renderAlbums();
+          }
+
+          function loadMore(){
+            const n=parse(
+              Android.getPhotos(
+                offset,
+                pageSize
+              )
+            );
+
+            offset+=n.length;
+            all=all.concat(n);
+
+            document
+              .getElementById('galleryGrid')
+              .insertAdjacentHTML(
+                'beforeend',
+                n.map(photoHtml).join('')
+              );
+          }
+
+          function renderRecent(){
+            document
+              .getElementById('recent')
+              .innerHTML=
+                all
+                .slice(0,18)
+                .map(photoHtml)
+                .join('');
+          }
+
+          function smartItems(){
+            let out=
+              Object.entries(stats)
+              .sort((a,b)=>b[1]-a[1])
+              .slice(0,4)
+              .map(([name,count])=>({
+                name,
+                count,
+                kind:'search'
+              }));
+
+            let used=
+              new Set(
+                out.map(
+                  x=>x.name.toLowerCase()
+                )
+              );
+
+            for(const b of buckets){
+              if(out.length>=8)
+                break;
+
+              if(!used.has(b.name.toLowerCase())){
+                out.push({
+                  name:b.name,
+                  count:b.count,
+                  kind:'bucket'
+                });
+
+                used.add(
+                  b.name.toLowerCase()
+                );
+              }
+            }
+
+            return out;
+          }
+
+          function renderSmart(){
+            document
+              .getElementById('smartCats')
+              .innerHTML=
+                smartItems()
+                .map(x=>`
+                  <div class="card" onclick="searchFor('${x.name.replace(/'/g,'')}')">
+                    <div>🗂️</div>
+                    <div>
+                      <b>${x.name}</b>
+                      <div class="muted">
+                        ${x.kind==='search'?'často hledané':x.count+' fotek'}
+                      </div>
+                    </div>
+                  </div>
+                `)
+                .join('');
+          }
+
+          function doSearch(){
+            const q=
+              document
+              .getElementById('search')
+              .value
+              .trim();
+
+            if(!q){
+              show('gallery');
+              return;
+            }
+
+            stats[q]=(stats[q]||0)+1;
+            saveState();
+
+            const r=parse(
+              Android.searchPhotos(
+                q,
+                0,
+                300
+              )
+            );
+
+            show('gallery');
+
+            document
+              .getElementById('galleryGrid')
+              .innerHTML=
+                r.map(photoHtml).join('');
+          }
+
+          function searchFor(q){
+            document
+              .getElementById('search')
+              .value=q;
+
+            doSearch();
+          }
+
+          function openViewer(id){
+            current=
+              all.find(
+                x=>x.id===id
+              );
+
+            if(!current)
+              return;
+
+            document
+              .getElementById('viewerImg')
+              .src=current.full;
+
+            document
+              .getElementById('viewerName')
+              .textContent=
+                current.name||'Fotografie';
+
+            document
+              .getElementById('viewer')
+              .classList.add('show');
+          }
+
+          function closeViewer(){
+            document
+              .getElementById('viewer')
+              .classList.remove('show');
+          }
+
+          function toggleFav(id){
+            if(favs.has(id))
+              favs.delete(id);
+            else
+              favs.add(id);
+
+            saveState();
+            refreshAll();
+          }
+
+          function newAlbum(){
+            const name=
+              prompt(
+                'Název nového alba'
+              );
+
+            if(!name)
+              return;
+
+            albums.push({
+              id:Date.now(),
+              name,
+              ids:[]
+            });
+
+            saveState();
+            renderAlbums();
+          }
+
+          function addCurrentToAlbum(){
+            if(!current)
+              return;
+
+            if(!albums.length){
+              newAlbum();
+
+              if(!albums.length)
+                return;
+            }
+
+            const text=
+              albums
+              .map(
+                (a,i)=>
+                  `${i+1}. ${a.name}`
+              )
+              .join('\n');
+
+            const n=
+              parseInt(
+                prompt(
+                  'Vyber číslo alba:\n'+
+                  text
+                )
+              );
+
+            if(!n||!albums[n-1])
+              return;
+
+            const a=albums[n-1];
+
+            if(!a.ids.includes(current.id))
+              a.ids.push(current.id);
+
+            saveState();
+            renderAlbums();
+
+            alert(
+              'Přidáno do alba '+a.name
+            );
+          }
+
+          function openCustomAlbum(id){
+            const a=
+              albums.find(
+                x=>x.id===id
+              );
+
+            if(!a)
+              return;
+
+            show('gallery');
+
+            const arr=
+              all.filter(
+                p=>a.ids.includes(p.id)
+              );
+
+            document
+              .getElementById('galleryGrid')
+              .innerHTML=
+                arr.map(photoHtml).join('');
+          }
+
+          function renderAlbums(){
+            document
+              .getElementById('customAlbums')
+              .innerHTML=
+                albums
+                .map(a=>`
+                  <div class="row" onclick="openCustomAlbum(${a.id})">
+                    📁
+                    <div class="grow">
+                      <b>${a.name}</b>
+                      <div class="muted">${a.ids.length} fotografií</div>
+                    </div>
+                    ›
+                  </div>
+                `)
+                .join('');
+
+            document
+              .getElementById('systemAlbums')
+              .innerHTML=
+                buckets
+                .map(b=>`
+                  <div class="row" onclick="searchFor('${b.name.replace(/'/g,'')}')">
+                    📂
+                    <div class="grow">
+                      <b>${b.name}</b>
+                      <div class="muted">${b.count} fotografií</div>
+                    </div>
+                    ›
+                  </div>
+                `)
+                .join('');
+          }
+
+          function onNativeGalleryChanged(){
+            setTimeout(
+              refreshAll,
+              500
+            );
+          }
+
+          onPermissionChanged();
+          </script>
+          </body>
+          </html>
+          EOF
+
+      - name: Build APK
+        run: gradle assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FOTOBOX-v4-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
